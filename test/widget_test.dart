@@ -1,30 +1,43 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
 import 'package:inspection_report/main.dart';
+import 'package:inspection_report/models/inspection_report.dart';
+import 'package:inspection_report/services/local_storage_service.dart';
+
+class MockLocalStorageService extends Fake implements LocalStorageService {
+  @override
+  Future<List<InspectionReport>> loadReports() async {
+    return [];
+  }
+
+  @override
+  Future<void> saveReports(List<InspectionReport> reports) async {
+    return;
+  }
+}
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
+  testWidgets('Smoke test for Inspection Reports App', (WidgetTester tester) async {
+    final mockStorage = MockLocalStorageService();
+
     // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+    await tester.pumpWidget(
+      InspectionReportApp(
+        storageService: mockStorage,
+      ),
+    );
+    
+    // Verify that we initially show a loading indicator
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
-
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
+    // Let the loading future execute (runs microtasks) and rebuild
     await tester.pump();
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    // Verify that we start on the home screen showing the app bar title.
+    expect(find.text('Inspection Reports'), findsOneWidget);
+
+    // Verify that we display the empty state message.
+    expect(find.text('No inspection reports yet'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
   });
 }
