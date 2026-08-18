@@ -3,12 +3,16 @@ class InspectionReport {
   final String region;
   final String serialNo;
   final String report;
+  final String officerName;
+  final String employeeCode;
 
   InspectionReport({
     required this.id,
     required this.region,
     required this.serialNo,
     required this.report,
+    this.officerName = '',
+    this.employeeCode = '',
   });
 
   /// Convert a JSON Map into an InspectionReport instance.
@@ -18,6 +22,8 @@ class InspectionReport {
       region: json['region'] as String? ?? '',
       serialNo: json['serialNo'] as String? ?? '',
       report: json['report'] as String? ?? '',
+      officerName: json['officerName'] as String? ?? json['inspectorName'] as String? ?? '',
+      employeeCode: json['employeeCode'] as String? ?? '',
     );
   }
 
@@ -28,6 +34,8 @@ class InspectionReport {
       'region': region,
       'serialNo': serialNo,
       'report': report,
+      'officerName': officerName,
+      'employeeCode': employeeCode,
     };
   }
 
@@ -36,12 +44,16 @@ class InspectionReport {
     String? region,
     String? serialNo,
     String? report,
+    String? officerName,
+    String? employeeCode,
   }) {
     return InspectionReport(
       id: id,
       region: region ?? this.region,
       serialNo: serialNo ?? this.serialNo,
       report: report ?? this.report,
+      officerName: officerName ?? this.officerName,
+      employeeCode: employeeCode ?? this.employeeCode,
     );
   }
 }

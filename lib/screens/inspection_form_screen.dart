@@ -1,11 +1,17 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../models/inspection_report.dart';
+import '../models/user_profile.dart';
 
 class InspectionFormScreen extends StatefulWidget {
   final InspectionReport? report;
+  final UserProfile? userProfile;
 
-  const InspectionFormScreen({super.key, this.report});
+  const InspectionFormScreen({
+    super.key,
+    this.report,
+    this.userProfile,
+  });
 
   @override
   State<InspectionFormScreen> createState() => _InspectionFormScreenState();
@@ -38,12 +44,22 @@ class _InspectionFormScreenState extends State<InspectionFormScreen> {
 
   void _saveForm() {
     if (_formKey.currentState!.validate()) {
+      final officerName = widget.report?.officerName.isNotEmpty == true
+          ? widget.report!.officerName
+          : (widget.userProfile?.name ?? '');
+
+      final employeeCode = widget.report?.employeeCode.isNotEmpty == true
+          ? widget.report!.employeeCode
+          : (widget.userProfile?.employeeCode ?? '');
+
       // Create new report or update existing
       final savedReport = InspectionReport(
         id: widget.report?.id ?? DateTime.now().microsecondsSinceEpoch.toString() + Random().nextInt(1000).toString(),
         region: _selectedRegion!,
         serialNo: _serialNoController.text.trim(),
         report: _reportController.text.trim(),
+        officerName: officerName,
+        employeeCode: employeeCode,
       );
 
       // Pop back to home screen returning the report

@@ -2,9 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inspection_report/main.dart';
 import 'package:inspection_report/models/inspection_report.dart';
+import 'package:inspection_report/models/user_profile.dart';
 import 'package:inspection_report/services/local_storage_service.dart';
 
 class MockLocalStorageService extends Fake implements LocalStorageService {
+  @override
+  Future<UserProfile?> loadUserProfile() async {
+    return UserProfile(name: 'Test Officer', employeeCode: 'EMP-001');
+  }
+
+  @override
+  Future<void> saveUserProfile(UserProfile profile) async {
+    return;
+  }
+
   @override
   Future<List<InspectionReport>> loadReports() async {
     return [];

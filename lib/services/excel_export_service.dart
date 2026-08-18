@@ -39,7 +39,7 @@ class ExcelExportService {
     );
 
     // 4. Write Header Row (Row 0)
-    final headers = ['Region', 'Serial No.', 'Report'];
+    final headers = ['Inspector Name', 'Employee Code', 'Region', 'Serial No.', 'Report'];
     for (int col = 0; col < headers.length; col++) {
       final cell = sheetObject.cell(CellIndex.indexByColumnRow(columnIndex: col, rowIndex: 0));
       cell.value = TextCellValue(headers[col]);
@@ -49,7 +49,13 @@ class ExcelExportService {
     // 5. Write Data Rows (Row 1 onwards)
     for (int row = 0; row < reports.length; row++) {
       final report = reports[row];
-      final rowData = [report.region, report.serialNo, report.report];
+      final rowData = [
+        report.officerName,
+        report.employeeCode,
+        report.region,
+        report.serialNo,
+        report.report,
+      ];
       final rowIndex = row + 1;
 
       for (int col = 0; col < rowData.length; col++) {
@@ -60,9 +66,11 @@ class ExcelExportService {
     }
 
     // 6. Set reasonable column widths
-    sheetObject.setColumnWidth(0, 15.0); // Region
-    sheetObject.setColumnWidth(1, 15.0); // Serial No.
-    sheetObject.setColumnWidth(2, 60.0); // Report (wrapped)
+    sheetObject.setColumnWidth(0, 22.0); // Inspector Name
+    sheetObject.setColumnWidth(1, 16.0); // Employee Code
+    sheetObject.setColumnWidth(2, 15.0); // Region
+    sheetObject.setColumnWidth(3, 15.0); // Serial No.
+    sheetObject.setColumnWidth(4, 60.0); // Report (wrapped)
 
     // 7. Generate a unique name for local storage
     final tempDir = await getTemporaryDirectory();

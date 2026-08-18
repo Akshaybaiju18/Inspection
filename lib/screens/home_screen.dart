@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import '../models/inspection_report.dart';
+import '../models/user_profile.dart';
 import '../services/local_storage_service.dart';
 import '../services/excel_export_service.dart';
 import 'inspection_form_screen.dart';
+import 'user_profile_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final LocalStorageService? storageService;
@@ -23,6 +25,7 @@ class _HomeScreenState extends State<HomeScreen> {
   late final LocalStorageService _storageService;
   late final ExcelExportService _excelService;
 
+  UserProfile? _userProfile;
   List<InspectionReport> _reports = [];
   bool _isLoading = true;
   bool _isExporting = false;
@@ -32,7 +35,73 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _storageService = widget.storageService ?? LocalStorageService();
     _excelService = widget.excelService ?? ExcelExportService();
-    _loadReports();
+    _loadInitialData();
+  }
+
+  Future<void> _loadInitialData() async {
+    setState(() {
+      _isLoading = true;
+    });
+    try {
+      final profile = await _storageService.loadUserProfile();
+      final reports = await _storageService.loadReports();
+
+      setState(() {
+        _userProfile = profile;
+        _reports = reports;
+      });
+
+      // If user profile is missing, force profile registration on first launch
+      if (profile == null && mounted) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _promptInitialProfileSetup();
+        });
+      }
+    } catch (e) {
+      _showErrorSnackBar('Failed to load local data.');
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _promptInitialProfileSetup() async {
+    final newProfile = await Navigator.push<UserProfile>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => UserProfileScreen(
+          isInitialSetup: true,
+          storageService: _storageService,
+        ),
+      ),
+    );
+
+    if (newProfile != null && mounted) {
+      setState(() {
+        _userProfile = newProfile;
+      });
+      _showSuccessSnackBar('Welcome, ${newProfile.name}!');
+    }
+  }
+
+  Future<void> _editUserProfile() async {
+    final updatedProfile = await Navigator.push<UserProfile>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => UserProfileScreen(
+          existingProfile: _userProfile,
+          storageService: _storageService,
+        ),
+      ),
+    );
+
+    if (updatedProfile != null && mounted) {
+      setState(() {
+        _userProfile = updatedProfile;
+      });
+      _showSuccessSnackBar('Profile updated successfully.');
+    }
   }
 
   Future<void> _loadReports() async {
@@ -54,9 +123,20 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _addNewReport() async {
+    if (_userProfile == null) {
+      await _promptInitialProfileSetup();
+      if (_userProfile == null) return;
+    }
+
+    if (!mounted) return;
+
     final result = await Navigator.push<InspectionReport>(
       context,
-      MaterialPageRoute(builder: (context) => const InspectionFormScreen()),
+      MaterialPageRoute(
+        builder: (context) => InspectionFormScreen(
+          userProfile: _userProfile,
+        ),
+      ),
     );
 
     if (result != null) {
@@ -72,7 +152,10 @@ class _HomeScreenState extends State<HomeScreen> {
     final result = await Navigator.push<InspectionReport>(
       context,
       MaterialPageRoute(
-        builder: (context) => InspectionFormScreen(report: report),
+        builder: (context) => InspectionFormScreen(
+          report: report,
+          userProfile: _userProfile,
+        ),
       ),
     );
 
@@ -185,12 +268,29 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Inspection Reports',
-          style: TextStyle(fontWeight: FontWeight.bold),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Inspection Reports',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+            if (_userProfile != null)
+              Text(
+                'Inspector: ${_userProfile!.name} (${_userProfile!.employeeCode})',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurface.withAlpha(180),
+                ),
+              ),
+          ],
         ),
         elevation: 2,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.account_circle_outlined),
+            tooltip: 'User Profile',
+            onPressed: _editUserProfile,
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Reload Reports',
@@ -363,6 +463,23 @@ class _HomeScreenState extends State<HomeScreen> {
             expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Divider(),
+              if (report.officerName.isNotEmpty) ...[
+                Row(
+                  children: [
+                    Icon(Icons.person_outline, size: 16, color: theme.colorScheme.primary),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Inspector: ${report.officerName} (${report.employeeCode})',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+              ],
               // Detailed report view
               Text(
                 'Full Report:',
