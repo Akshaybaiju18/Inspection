@@ -8,6 +8,7 @@ import '../models/user_profile.dart';
 class LocalStorageService {
   static const String _reportsFileName = 'inspection_reports.json';
   static const String _profileFileName = 'user_profile.json';
+  static const String _settingsFileName = 'export_settings.json';
 
   /// Get local file handle for specified filename.
   Future<File> _getFile(String fileName) async {
@@ -48,6 +49,59 @@ class LocalStorageService {
         print('Error saving user profile: $e');
       }
       rethrow;
+    }
+  }
+
+  /// Get the saved export folder path.
+  Future<String?> getExportFolderPath() async {
+    try {
+      final file = await _getFile(_settingsFileName);
+      if (!await file.exists()) {
+        return null;
+      }
+      final jsonString = await file.readAsString();
+      final Map<String, dynamic> jsonMap = jsonDecode(jsonString) as Map<String, dynamic>;
+      final path = jsonMap['exportFolderPath'] as String?;
+      if (path != null && path.trim().isNotEmpty) {
+        return path.trim();
+      }
+      return null;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error loading export folder path: $e');
+      }
+      return null;
+    }
+  }
+
+  /// Save the chosen export folder path.
+  Future<void> saveExportFolderPath(String folderPath) async {
+    try {
+      final file = await _getFile(_settingsFileName);
+      final jsonString = jsonEncode({'exportFolderPath': folderPath.trim()});
+      await file.writeAsString(jsonString);
+      if (kDebugMode) {
+        print('Export folder path saved: $folderPath');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error saving export folder path: $e');
+      }
+      rethrow;
+    }
+  }
+
+  /// Clear the saved export folder path (to allow resetting).
+  Future<void> clearExportFolderPath() async {
+    try {
+      final file = await _getFile(_settingsFileName);
+      if (await file.exists()) {
+        await file.delete();
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error clearing export folder path: $e');
+      }
     }
   }
 

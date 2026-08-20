@@ -5,9 +5,12 @@ import '../models/inspection_report.dart';
 
 class ExcelExportService {
   /// Generate an Excel sheet containing inspection reports,
-  /// save it to a temporary directory with a unique date-based filename,
+  /// save it to the specified directory with a unique date-based filename,
   /// and return the absolute file path.
-  Future<String> exportToExcel(List<InspectionReport> reports) async {
+  Future<String> exportToExcel(
+    List<InspectionReport> reports, {
+    String? targetDirectoryPath,
+  }) async {
     // 1. Create a new Excel workbook
     final excel = Excel.createExcel();
     
@@ -72,8 +75,21 @@ class ExcelExportService {
     sheetObject.setColumnWidth(3, 15.0); // Serial No.
     sheetObject.setColumnWidth(4, 60.0); // Report (wrapped)
 
-    // 7. Generate a unique name for local storage
-    final tempDir = await getTemporaryDirectory();
+    // 7. Resolve target directory
+    final String resolvedDirPath;
+    if (targetDirectoryPath != null && targetDirectoryPath.trim().isNotEmpty) {
+      resolvedDirPath = targetDirectoryPath.trim();
+    } else {
+      final tempDir = await getTemporaryDirectory();
+      resolvedDirPath = tempDir.path;
+    }
+
+    final targetDir = Directory(resolvedDirPath);
+    if (!await targetDir.exists()) {
+      await targetDir.create(recursive: true);
+    }
+
+    // 8. Generate a unique name for local storage
     final now = DateTime.now();
     final year = now.year.toString();
     final month = now.month.toString().padLeft(2, '0');
@@ -84,18 +100,18 @@ class ExcelExportService {
     const ext = '.xlsx';
 
     String fileName = '$baseName$ext';
-    File file = File('${tempDir.path}/$fileName');
+    File file = File('${targetDir.path}/$fileName');
     int counter = 1;
 
     // Handle duplicates
     while (await file.exists()) {
       final suffix = counter.toString().padLeft(2, '0');
       fileName = '${baseName}_$suffix$ext';
-      file = File('${tempDir.path}/$fileName');
+      file = File('${targetDir.path}/$fileName');
       counter++;
     }
 
-    // 8. Save the bytes to the temporary file
+    // 9. Save the bytes to the target file
     final fileBytes = excel.save();
     if (fileBytes == null) {
       throw Exception('Failed to generate Excel file bytes.');

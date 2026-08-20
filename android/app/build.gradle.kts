@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "com.example.inspectionreport.inspection_report"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

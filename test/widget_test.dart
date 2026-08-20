@@ -17,6 +17,21 @@ class MockLocalStorageService extends Fake implements LocalStorageService {
   }
 
   @override
+  Future<String?> getExportFolderPath() async {
+    return '/mock/storage/Inspection Reports';
+  }
+
+  @override
+  Future<void> saveExportFolderPath(String folderPath) async {
+    return;
+  }
+
+  @override
+  Future<void> clearExportFolderPath() async {
+    return;
+  }
+
+  @override
   Future<List<InspectionReport>> loadReports() async {
     return [];
   }

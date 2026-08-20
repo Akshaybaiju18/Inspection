@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import '../models/inspection_report.dart';
@@ -208,10 +210,208 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  /// Prompts user to pick a location and name a folder for storing Excel reports.
+  Future<String?> _setupExportFolderFlow() async {
+    // 1. Pick a base directory using system picker
+    final selectedDirectory = await FilePicker.platform.getDirectoryPath(
+      dialogTitle: 'Select Location for Reports Folder',
+    );
+
+    if (selectedDirectory == null || selectedDirectory.trim().isEmpty) {
+      return null;
+    }
+
+    if (!mounted) return null;
+
+    // 2. Ask user for the folder name
+    final folderNameController = TextEditingController(text: 'Inspection Reports');
+    final formKey = GlobalKey<FormState>();
+
+    final chosenFolderName = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.create_new_folder_outlined),
+            SizedBox(width: 10),
+            Text('Create Reports Folder'),
+          ],
+        ),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Enter a folder name to create at the selected location:',
+                style: TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest.withAlpha(80),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.folder_outlined, size: 16),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        selectedDirectory,
+                        style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: folderNameController,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: 'Folder Name',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.drive_file_rename_outline),
+                ),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Please enter a folder name';
+                  }
+                  if (value.contains('/') || value.contains('\\') || value.contains(':')) {
+                    return 'Folder name cannot contain special characters / \\ :';
+                  }
+                  return null;
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, null),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                Navigator.pop(context, folderNameController.text.trim());
+              }
+            },
+            child: const Text('Create & Save'),
+          ),
+        ],
+      ),
+    );
+
+    if (chosenFolderName == null || chosenFolderName.isEmpty) {
+      return null;
+    }
+
+    final finalPath = '$selectedDirectory/$chosenFolderName';
+    final dir = Directory(finalPath);
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
+
+    await _storageService.saveExportFolderPath(finalPath);
+    return finalPath;
+  }
+
+  /// Manage or change the export storage location
+  Future<void> _manageStorageLocation() async {
+    final currentPath = await _storageService.getExportFolderPath();
+
+    if (!mounted) return;
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.folder_special_outlined),
+            SizedBox(width: 10),
+            Text('Report Storage Location'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Inspection reports are saved directly to this folder on your device:',
+              style: TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest.withAlpha(100),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.outlineVariant.withAlpha(120),
+                ),
+              ),
+              child: Text(
+                currentPath ?? 'No location configured yet.\nYou will be prompted on your first export.',
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () async {
+              Navigator.pop(context);
+              final newPath = await _setupExportFolderFlow();
+              if (newPath != null) {
+                _showSuccessSnackBar('Storage location updated.');
+              }
+            },
+            icon: const Icon(Icons.edit_location_alt_outlined, size: 18),
+            label: Text(currentPath == null ? 'Set Location' : 'Change Location'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _exportToExcel() async {
     if (_reports.isEmpty) {
       _showErrorSnackBar('No reports available to export.');
       return;
+    }
+
+    // 1. Get or prompt for storage location
+    String? folderPath = await _storageService.getExportFolderPath();
+    if (folderPath == null || folderPath.isEmpty) {
+      // First time export: prompt user for location & folder name
+      folderPath = await _setupExportFolderFlow();
+      if (folderPath == null) {
+        _showErrorSnackBar('Export cancelled. Storage location is required.');
+        return;
+      }
+    } else {
+      // Ensure existing folder path directory exists
+      final dir = Directory(folderPath);
+      if (!await dir.exists()) {
+        try {
+          await dir.create(recursive: true);
+        } catch (_) {
+          folderPath = await _setupExportFolderFlow();
+          if (folderPath == null) return;
+        }
+      }
     }
 
     setState(() {
@@ -219,26 +419,69 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     try {
-      final filePath = await _excelService.exportToExcel(_reports);
-      
-      // Notify user of generation success
-      _showSuccessSnackBar('Excel export generated successfully.');
-
-      // Launch share sheet
-      final result = await Share.shareXFiles(
-        [XFile(filePath)],
-        text: 'Inspection Reports Export',
+      final filePath = await _excelService.exportToExcel(
+        _reports,
+        targetDirectoryPath: folderPath,
       );
 
-      if (result.status == ShareResultStatus.dismissed) {
-        debugPrint('Share sheet was dismissed.');
-      }
+      if (!mounted) return;
+
+      // Show success dialog with file path and share option
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          icon: const Icon(Icons.check_circle_outline, color: Colors.green, size: 48),
+          title: const Text('Report Saved to Device'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'The Excel report has been successfully generated and saved to your phone storage:',
+                style: TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest.withAlpha(100),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: SelectableText(
+                  filePath,
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Done'),
+            ),
+            ElevatedButton.icon(
+              onPressed: () async {
+                Navigator.pop(context);
+                await Share.shareXFiles(
+                  [XFile(filePath)],
+                  text: 'Inspection Reports Export',
+                );
+              },
+              icon: const Icon(Icons.share_outlined, size: 18),
+              label: const Text('Share File'),
+            ),
+          ],
+        ),
+      );
     } catch (e) {
-      _showErrorSnackBar('Excel generation or sharing failed: ${e.toString()}');
+      _showErrorSnackBar('Excel export failed: ${e.toString()}');
     } finally {
-      setState(() {
-        _isExporting = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isExporting = false;
+        });
+      }
     }
   }
 
@@ -286,15 +529,51 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         elevation: 2,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.account_circle_outlined),
-            tooltip: 'User Profile',
-            onPressed: _editUserProfile,
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Reload Reports',
-            onPressed: _loadReports,
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert),
+            tooltip: 'Options',
+            onSelected: (value) {
+              if (value == 'profile') {
+                _editUserProfile();
+              } else if (value == 'storage') {
+                _manageStorageLocation();
+              } else if (value == 'reload') {
+                _loadReports();
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'profile',
+                child: Row(
+                  children: [
+                    Icon(Icons.account_circle_outlined, size: 20),
+                    SizedBox(width: 10),
+                    Text('Inspector Profile'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'storage',
+                child: Row(
+                  children: [
+                    Icon(Icons.folder_special_outlined, size: 20),
+                    SizedBox(width: 10),
+                    Text('Storage Location'),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                value: 'reload',
+                child: Row(
+                  children: [
+                    Icon(Icons.refresh, size: 20),
+                    SizedBox(width: 10),
+                    Text('Reload Reports'),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -344,9 +623,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             strokeWidth: 2,
                           ),
                         )
-                      : const Icon(Icons.file_download_outlined),
+                      : const Icon(Icons.save_alt_outlined),
                   label: Text(
-                    _isExporting ? 'Generating Excel...' : 'Export to Excel',
+                    _isExporting ? 'Saving to Device...' : 'Save to Device Storage (.xlsx)',
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                   ),
                 ),
